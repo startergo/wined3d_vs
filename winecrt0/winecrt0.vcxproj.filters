@@ -15,19 +15,19 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\wine\dlls\winecrt0\dll_main.c">
+    <ClCompile Include="..\..\wine\libs\winecrt0\debug.c">
       <Filter>Quelldateien</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\wine\dlls\winecrt0\register.c">
+    <ClCompile Include="..\..\wine\libs\winecrt0\dll_canunload.c">
       <Filter>Quelldateien</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\wine\dlls\winecrt0\debug.c">
+    <ClCompile Include="..\..\wine\libs\winecrt0\dll_main.c">
       <Filter>Quelldateien</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\wine\dlls\winecrt0\dll_canunload.c">
+    <ClCompile Include="..\..\wine\libs\winecrt0\register.c">
       <Filter>Quelldateien</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\wine\dlls\winecrt0\dll_register.c">
+    <ClCompile Include="..\..\wine\libs\winecrt0\dll_register.c">
       <Filter>Quelldateien</Filter>
     </ClCompile>
   </ItemGroup>

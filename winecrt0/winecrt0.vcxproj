@@ -172,11 +172,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\wine\dlls\winecrt0\debug.c" />
-    <ClCompile Include="..\..\wine\dlls\winecrt0\dll_canunload.c" />
-    <ClCompile Include="..\..\wine\dlls\winecrt0\dll_main.c" />
-    <ClCompile Include="..\..\wine\dlls\winecrt0\dll_register.c" />
-    <ClCompile Include="..\..\wine\dlls\winecrt0\register.c" />
+    <ClCompile Include="..\..\wine\libs\winecrt0\debug.c" />
+    <ClCompile Include="..\..\wine\libs\winecrt0\dll_canunload.c" />
+    <ClCompile Include="..\..\wine\libs\winecrt0\dll_main.c" />
+    <ClCompile Include="..\..\wine\libs\winecrt0\dll_register.c" />
+    <ClCompile Include="..\..\wine\libs\winecrt0\register.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\wine\dlls\winecrt0\crt0_private.h" />
