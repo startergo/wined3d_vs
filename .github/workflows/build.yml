@@ -59,20 +59,25 @@ jobs:
         $grammar = "$env:GITHUB_WORKSPACE\vkd3d\include\private\spirv.core.grammar.json"
         $output = "$env:GITHUB_WORKSPACE\vkd3d\include\private\spirv_grammar.h"
         $makeSpirv = "$env:GITHUB_WORKSPACE\vkd3d\libs\vkd3d-shader\make_spirv"
-        if (Test-Path $grammar) {
-          perl $makeSpirv $grammar | Set-Content $output -Encoding utf8
-          Write-Host "Generated spirv_grammar.h"
-        } else {
-          Write-Host "No spirv grammar JSON found, skipping generation"
+        if (-not (Test-Path $grammar)) {
+          Write-Error "spirv.core.grammar.json not found at $grammar"
+          exit 1
         }
+        perl $makeSpirv $grammar | Set-Content $output -Encoding utf8
+        Write-Host "Generated spirv_grammar.h"
 
     - name: Patch vkd3d for MSVC compatibility
       shell: pwsh
       run: |
+        # Patch vkd3d_private.h: MSVC rejects DECLSPEC_ALIGN(sizeof(void *))
         $file = "$env:GITHUB_WORKSPACE\vkd3d\libs\vkd3d\vkd3d_private.h"
         $content = Get-Content $file -Raw
-        $content = $content.Replace(
-          'uint8_t DECLSPEC_ALIGN(sizeof(void *)) descriptors[]',
+        $search = 'uint8_t DECLSPEC_ALIGN(sizeof(void *)) descriptors[]'
+        if (-not $content.Contains($search)) {
+          Write-Error "vkd3d_private.h: expected string not found, patch may be outdated"
+          exit 1
+        }
+        $content = $content.Replace($search,
           @"
         uint8_t
         #ifdef _WIN64
@@ -103,18 +108,30 @@ jobs:
         # without __declspec(dllexport)
         $utilsCFile = "$env:GITHUB_WORKSPACE\vkd3d\libs\vkd3d-utils\vkd3d_utils_main.c"
         $utilsC = Get-Content $utilsCFile -Raw
+        $matchCount = ([regex]::Matches($utilsC, 'VKD3D_UTILS_API ')).Count
+        if ($matchCount -eq 0) {
+          Write-Error "vkd3d_utils_main.c: no VKD3D_UTILS_API found, patch may be outdated"
+          exit 1
+        }
         $utilsC = $utilsC -replace 'VKD3D_UTILS_API ', ''
         Set-Content $utilsCFile $utilsC -NoNewline
-        Write-Host "Patched vkd3d_utils_main.c to remove VKD3D_UTILS_API"
+        Write-Host "Patched vkd3d_utils_main.c: removed $matchCount VKD3D_UTILS_API occurrences"
 
-    - name: Fetch missing wine headers from master
+    - name: Fetch missing wine headers
       shell: pwsh
       run: |
-        # wtypesbase.idl was added to wine after 10.4 release
-        $url = "https://raw.githubusercontent.com/wine-mirror/wine/master/include/wtypesbase.idl"
+        # wtypesbase.idl was added to wine after the tagged release; pin to the same tag
+        $url = "https://raw.githubusercontent.com/wine-mirror/wine/${env:WINE_TAG}/include/wtypesbase.idl"
         $out = "$env:GITHUB_WORKSPACE\wine\include\wtypesbase.idl"
-        Invoke-WebRequest -Uri $url -OutFile $out
-        Write-Host "Downloaded wtypesbase.idl"
+        try {
+          Invoke-WebRequest -Uri $url -OutFile $out
+          Write-Host "Downloaded wtypesbase.idl from $env:WINE_TAG"
+        } catch {
+          # If the file doesn't exist in the tagged release either, try master as fallback
+          $fallbackUrl = "https://raw.githubusercontent.com/wine-mirror/wine/master/include/wtypesbase.idl"
+          Invoke-WebRequest -Uri $fallbackUrl -OutFile $out
+          Write-Warning "wtypesbase.idl not in $env:WINE_TAG, fetched from master"
+        }
 
     - name: Install Vulkan SDK
       uses: humbletim/setup-vulkan-sdk@v1.2.1
@@ -143,15 +160,29 @@ jobs:
         # Set INCLUDE to UCRT+VC only (no Windows SDK um/shared to avoid rpc.h conflicts)
         $env:INCLUDE = "$ucrtPath;$vcPath"
         "INCLUDE=$ucrtPath;$vcPath" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
-        # Strip $(IncludePath) from all vcxproj files so MSBuild won't add SDK paths via /I flags
+        # Strip $(IncludePath) and $(WindowsSDK_IncludePath) from all vcxproj files
+        # so MSBuild won't add SDK paths via /I flags
         Get-ChildItem "$env:GITHUB_WORKSPACE\wined3d_vs" -Recurse -Filter "*.vcxproj" | ForEach-Object {
           $content = Get-Content $_.FullName -Raw
+          $modified = $false
           if ($content.Contains('$(IncludePath)')) {
             $content = $content.Replace(';$(IncludePath)', '')
+            $modified = $true
+          }
+          if ($content.Contains('$(WindowsSDK_IncludePath)')) {
+            $content = $content.Replace(';$(WindowsSDK_IncludePath)', '')
+            $content = $content.Replace('$(WindowsSDK_IncludePath);', '')
+            $content = $content.Replace('$(WindowsSDK_IncludePath)', '')
+            $modified = $true
+          }
+          if ($modified) {
             Set-Content $_.FullName $content -NoNewline
-            Write-Host "Stripped `$(IncludePath) from $($_.Name)"
+            Write-Host "Stripped SDK include paths from $($_.Name)"
           }
         }
+        # NOTE: wined3d.dll uses /FORCE:MULTIPLE because vkd3d-common.lib
+        # defines D3D12 IIDs that Wine's WIDL-generated headers also define.
+        # The duplicate values are identical (same GUIDs), so this is safe.
 
     - name: Build foundational projects
       shell: pwsh
@@ -208,7 +239,27 @@ jobs:
         /p:Platform=${{ matrix.platform }}
         /verbosity:minimal
       working-directory: wined3d_vs
-      continue-on-error: true
+
+    - name: Verify build outputs
+      shell: pwsh
+      run: |
+        $platform = "${{ matrix.platform }}"
+        $config = "${{ matrix.configuration }}"
+        $privateDir = "$env:GITHUB_WORKSPACE\wined3d_vs\${platform}_${config}"
+        $frontendDir = "$env:GITHUB_WORKSPACE\wined3d_vs\${platform}_${config}_dll"
+        $dlls = @()
+        foreach ($dir in @($privateDir, $frontendDir)) {
+          if (Test-Path $dir) {
+            $dlls += Get-ChildItem -Path $dir -Filter "*.dll"
+          }
+        }
+        $count = $dlls.Count
+        Write-Host "Found $count DLLs"
+        $dlls | ForEach-Object { Write-Host "  $($_.Name)" }
+        if ($count -lt 10) {
+          Write-Error "Expected at least 10 DLLs, got $count. Build may have failed silently."
+          exit 1
+        }
 
     - name: Package DLLs
       shell: pwsh
