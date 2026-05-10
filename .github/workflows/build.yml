@@ -317,6 +317,8 @@ jobs:
     steps:
     - name: Checkout wined3d_vs
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Download all artifacts
       uses: actions/download-artifact@v4
@@ -335,11 +337,28 @@ jobs:
         done
         ls -la *.zip
 
+    - name: Determine release tag
+      id: tag
+      run: |
+        if [ -n "${{ inputs.release_tag }}" ]; then
+          echo "tag=${{ inputs.release_tag }}" >> "$GITHUB_OUTPUT"
+          echo "name=${{ inputs.release_tag }}" >> "$GITHUB_OUTPUT"
+        else
+          echo "tag=build-${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          echo "name=Build #${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Create git tag
+      run: git tag ${{ steps.tag.outputs.tag }}
+
+    - name: Push tag
+      run: git push origin ${{ steps.tag.outputs.tag }}
+
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: "${{ inputs.release_tag || format('build-{0}', github.run_number) }}"
-        name: "${{ inputs.release_tag || format('Build #{0}', github.run_number) }}"
+        tag_name: ${{ steps.tag.outputs.tag }}
+        name: ${{ steps.tag.outputs.name }}
         body: "Wine D3D DLLs built from ${{ env.WINE_TAG }} with vkd3d ${{ env.VKD3D_TAG }} (Vulkan/d3d12 support). Includes: d3d8, d3d9, d3d11, d3d12, ddraw, dxgi, d3d10core, d2d1, d3dx9_36, d3dxof, d3drm, dsound, wined3d, vkd3d, debug symbols (PDBs)"
         files: artifacts/*.zip
       env:
