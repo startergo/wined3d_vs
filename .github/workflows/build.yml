@@ -339,20 +339,26 @@ jobs:
 
     - name: Determine release tag
       id: tag
+      shell: bash
       run: |
         if [ -n "${{ inputs.release_tag }}" ]; then
-          echo "tag=${{ inputs.release_tag }}" >> "$GITHUB_OUTPUT"
-          echo "name=${{ inputs.release_tag }}" >> "$GITHUB_OUTPUT"
+          raw="${{ inputs.release_tag }}"
         else
-          echo "tag=build-${{ github.run_number }}" >> "$GITHUB_OUTPUT"
-          echo "name=Build #${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          raw="build-${{ github.run_number }}"
         fi
+        # Git tags cannot contain spaces or most special chars
+        tag=$(echo "$raw" | sed 's/[^a-zA-Z0-9._-]/-/g' | sed 's/--*/-/g' | sed 's/^-\|-$//g')
+        echo "tag=$tag" >> "$GITHUB_OUTPUT"
+        echo "name=$raw" >> "$GITHUB_OUTPUT"
+        echo "Release tag: $tag"
+        echo "Release name: $raw"
 
-    - name: Create git tag
-      run: git tag ${{ steps.tag.outputs.tag }}
-
-    - name: Push tag
-      run: git push origin ${{ steps.tag.outputs.tag }}
+    - name: Create and push git tag
+      shell: bash
+      run: |
+        TAG="${{ steps.tag.outputs.tag }}"
+        git tag "$TAG"
+        git push origin "$TAG"
 
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
