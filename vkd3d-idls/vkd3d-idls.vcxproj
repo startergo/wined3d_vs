@@ -101,8 +101,8 @@
       <HeaderFileName>%(Filename).h</HeaderFileName>
     </Midl>
     <CustomBuild>
-      <Command>..\widl\widl.exe -o %(Filename).h --nostdinc %(FullPath) -I..\..\vkd3d\include</Command>
-      <Outputs>%(Filename).h</Outputs>
+      <Command>..\widl\widl.exe -o ..\..\vkd3d\include\%(Filename).h --nostdinc %(FullPath) -I..\..\vkd3d\include</Command>
+      <Outputs>..\..\vkd3d\include\%(Filename).h</Outputs>
     </CustomBuild>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -121,8 +121,8 @@
       <HeaderFileName>%(Filename).h</HeaderFileName>
     </Midl>
     <CustomBuild>
-      <Command>..\widl\widl.exe -o %(Filename).h --nostdinc %(FullPath) -I..\..\vkd3d\include</Command>
-      <Outputs>%(Filename).h</Outputs>
+      <Command>..\widl\widl.exe -o ..\..\vkd3d\include\%(Filename).h --nostdinc %(FullPath) -I..\..\vkd3d\include</Command>
+      <Outputs>..\..\vkd3d\include\%(Filename).h</Outputs>
     </CustomBuild>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -145,8 +145,8 @@
       <HeaderFileName>%(Filename).h</HeaderFileName>
     </Midl>
     <CustomBuild>
-      <Command>..\widl\widl.exe -o %(Filename).h --nostdinc %(FullPath) -I..\..\vkd3d\include</Command>
-      <Outputs>%(Filename).h</Outputs>
+      <Command>..\widl\widl.exe -o ..\..\vkd3d\include\%(Filename).h --nostdinc %(FullPath) -I..\..\vkd3d\include</Command>
+      <Outputs>..\..\vkd3d\include\%(Filename).h</Outputs>
     </CustomBuild>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -169,8 +169,8 @@
       <HeaderFileName>%(Filename).h</HeaderFileName>
     </Midl>
     <CustomBuild>
-      <Command>..\widl\widl.exe -o %(Filename).h --nostdinc %(FullPath) -I..\..\vkd3d\include</Command>
-      <Outputs>%(Filename).h</Outputs>
+      <Command>..\widl\widl.exe -o ..\..\vkd3d\include\%(Filename).h --nostdinc %(FullPath) -I..\..\vkd3d\include</Command>
+      <Outputs>..\..\vkd3d\include\%(Filename).h</Outputs>
     </CustomBuild>
   </ItemDefinitionGroup>
   <ItemGroup>

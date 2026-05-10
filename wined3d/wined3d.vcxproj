@@ -106,9 +106,9 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>winecrt0.lib;gdi32.lib;user32.lib;advapi32.lib;opengl32.lib;ntdll.lib;vkd3d.lib;vkd3d-shader.lib</AdditionalDependencies>
+      <AdditionalDependencies>winecrt0.lib;gdi32.lib;user32.lib;advapi32.lib;opengl32.lib;ntdll.lib;vkd3d.lib;vkd3d-shader.lib;vkd3d-utils.lib;vkd3d-common.lib</AdditionalDependencies>
       <AdditionalLibraryDirectories>..\Debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalOptions>/IGNORE:4093</AdditionalOptions>
+      <AdditionalOptions>/IGNORE:4093 /FORCE:MULTIPLE</AdditionalOptions>
       <ModuleDefinitionFile>$(IntDir)$(TargetName).def</ModuleDefinitionFile>
     </Link>
     <Midl>
@@ -126,9 +126,9 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>winecrt0.lib;gdi32.lib;user32.lib;advapi32.lib;opengl32.lib;ntdll.lib;vkd3d.lib;vkd3d-shader.lib</AdditionalDependencies>
+      <AdditionalDependencies>winecrt0.lib;gdi32.lib;user32.lib;advapi32.lib;opengl32.lib;ntdll.lib;vkd3d.lib;vkd3d-shader.lib;vkd3d-utils.lib;vkd3d-common.lib</AdditionalDependencies>
       <AdditionalLibraryDirectories>..\Debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalOptions>/IGNORE:4093</AdditionalOptions>
+      <AdditionalOptions>/IGNORE:4093 /FORCE:MULTIPLE</AdditionalOptions>
       <ModuleDefinitionFile>$(IntDir)$(TargetName).def</ModuleDefinitionFile>
     </Link>
     <Midl>
@@ -150,9 +150,9 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>winecrt0.lib;gdi32.lib;user32.lib;advapi32.lib;opengl32.lib;ntdll.lib;vkd3d.lib;vkd3d-shader.lib</AdditionalDependencies>
+      <AdditionalDependencies>winecrt0.lib;gdi32.lib;user32.lib;advapi32.lib;opengl32.lib;ntdll.lib;vkd3d.lib;vkd3d-shader.lib;vkd3d-utils.lib;vkd3d-common.lib</AdditionalDependencies>
       <AdditionalLibraryDirectories>..\Debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalOptions>/IGNORE:4093</AdditionalOptions>
+      <AdditionalOptions>/IGNORE:4093 /FORCE:MULTIPLE</AdditionalOptions>
       <ModuleDefinitionFile>$(IntDir)$(TargetName).def</ModuleDefinitionFile>
     </Link>
     <Midl>
@@ -174,9 +174,9 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>winecrt0.lib;gdi32.lib;user32.lib;advapi32.lib;opengl32.lib;ntdll.lib;vkd3d.lib;vkd3d-shader.lib</AdditionalDependencies>
+      <AdditionalDependencies>winecrt0.lib;gdi32.lib;user32.lib;advapi32.lib;opengl32.lib;ntdll.lib;vkd3d.lib;vkd3d-shader.lib;vkd3d-utils.lib;vkd3d-common.lib</AdditionalDependencies>
       <AdditionalLibraryDirectories>..\Debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalOptions>/IGNORE:4093</AdditionalOptions>
+      <AdditionalOptions>/IGNORE:4093 /FORCE:MULTIPLE</AdditionalOptions>
       <ModuleDefinitionFile>$(IntDir)$(TargetName).def</ModuleDefinitionFile>
     </Link>
     <Midl>

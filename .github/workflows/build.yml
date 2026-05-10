@@ -1,0 +1,296 @@
+name: Build
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create GitHub Release'
+        required: false
+        default: false
+        type: boolean
+      release_tag:
+        description: 'Release tag (e.g. wine-10.0-rc4)'
+        required: false
+        type: string
+
+env:
+  WINE_TAG: wine-10.20
+  VKD3D_TAG: vkd3d-1.19
+
+jobs:
+  build:
+    runs-on: windows-2025-vs2026
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - configuration: Debug
+            platform: Win32
+          - configuration: Release
+            platform: Win32
+
+    steps:
+    - name: Checkout wined3d_vs
+      uses: actions/checkout@v4
+      with:
+        path: wined3d_vs
+
+    - name: Clone Wine sources
+      run: git clone --depth 1 --branch $env:WINE_TAG https://github.com/wine-mirror/wine.git wine
+
+    - name: Clone vkd3d sources
+      run: git clone --depth 1 --branch $env:VKD3D_TAG https://gitlab.winehq.org/wine/vkd3d.git vkd3d
+
+    - name: Apply patches to Wine
+      shell: pwsh
+      working-directory: wined3d_vs
+      run: |
+        Get-ChildItem -Path "patches" -Filter "*.patch" | Sort-Object Name | ForEach-Object {
+          Write-Host "Applying $($_.Name)..."
+          git -C "$env:GITHUB_WORKSPACE\wine" apply --ignore-whitespace $_.FullName
+        }
+
+    - name: Generate vkd3d spirv_grammar.h
+      shell: pwsh
+      run: |
+        $grammar = "$env:GITHUB_WORKSPACE\vkd3d\include\private\spirv.core.grammar.json"
+        $output = "$env:GITHUB_WORKSPACE\vkd3d\include\private\spirv_grammar.h"
+        $makeSpirv = "$env:GITHUB_WORKSPACE\vkd3d\libs\vkd3d-shader\make_spirv"
+        if (Test-Path $grammar) {
+          perl $makeSpirv $grammar | Set-Content $output -Encoding utf8
+          Write-Host "Generated spirv_grammar.h"
+        } else {
+          Write-Host "No spirv grammar JSON found, skipping generation"
+        }
+
+    - name: Patch vkd3d for MSVC compatibility
+      shell: pwsh
+      run: |
+        $file = "$env:GITHUB_WORKSPACE\vkd3d\libs\vkd3d\vkd3d_private.h"
+        $content = Get-Content $file -Raw
+        $content = $content.Replace(
+          'uint8_t DECLSPEC_ALIGN(sizeof(void *)) descriptors[]',
+          @"
+        uint8_t
+        #ifdef _WIN64
+            DECLSPEC_ALIGN(8)
+        #else
+            DECLSPEC_ALIGN(4)
+        #endif
+            descriptors[]
+        "@
+        )
+        Set-Content $file $content -NoNewline
+        Write-Host "Patched vkd3d_private.h for MSVC"
+
+        # Patch vkd3d_utils.h to remove __declspec(dllimport) from function
+        # declarations that conflict with Wine's IDL-generated headers
+        $utilsFile = "$env:GITHUB_WORKSPACE\vkd3d\include\vkd3d_utils.h"
+        $utils = Get-Content $utilsFile -Raw
+        $utils = $utils -replace 'VKD3D_UTILS_API (HRESULT WINAPI )', '$1'
+        $utils = $utils -replace 'VKD3D_UTILS_API (HANDLE )', '$1'
+        $utils = $utils -replace 'VKD3D_UTILS_API (HRESULT )', '$1'
+        $utils = $utils -replace 'VKD3D_UTILS_API (unsigned int )', '$1'
+        $utils = $utils -replace 'VKD3D_UTILS_API (void )', '$1'
+        Set-Content $utilsFile $utils -NoNewline
+        Write-Host "Patched vkd3d_utils.h to remove dllimport from declarations"
+
+        # Also strip VKD3D_UTILS_API from the .c file to avoid linkage conflict
+        # with WIDL-generated vkd3d_d3d12.h which declares D3D12CreateDevice
+        # without __declspec(dllexport)
+        $utilsCFile = "$env:GITHUB_WORKSPACE\vkd3d\libs\vkd3d-utils\vkd3d_utils_main.c"
+        $utilsC = Get-Content $utilsCFile -Raw
+        $utilsC = $utilsC -replace 'VKD3D_UTILS_API ', ''
+        Set-Content $utilsCFile $utilsC -NoNewline
+        Write-Host "Patched vkd3d_utils_main.c to remove VKD3D_UTILS_API"
+
+    - name: Fetch missing wine headers from master
+      shell: pwsh
+      run: |
+        # wtypesbase.idl was added to wine after 10.4 release
+        $url = "https://raw.githubusercontent.com/wine-mirror/wine/master/include/wtypesbase.idl"
+        $out = "$env:GITHUB_WORKSPACE\wine\include\wtypesbase.idl"
+        Invoke-WebRequest -Uri $url -OutFile $out
+        Write-Host "Downloaded wtypesbase.idl"
+
+    - name: Install Vulkan SDK
+      uses: humbletim/setup-vulkan-sdk@v1.2.1
+      with:
+        vulkan-query-version: 1.3.280.0
+        vulkan-components: Vulkan-Headers, SPIRV-Headers
+
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Exclude Windows SDK headers
+      shell: pwsh
+      run: |
+        # Find UCRT (standard C headers: assert.h, stdio.h, etc.)
+        $sdkInclude = "${env:ProgramFiles(x86)}\Windows Kits\10\Include"
+        if (-not (Test-Path $sdkInclude)) { $sdkInclude = "$env:ProgramFiles\Windows Kits\10\Include" }
+        $latestSdk = Get-ChildItem $sdkInclude -Directory | Sort-Object Name -Descending | Select-Object -First 1
+        $ucrtPath = Join-Path $latestSdk.FullName "ucrt"
+        Write-Host "UCRT: $ucrtPath"
+        # Find VC include (compiler intrinsics: stddef.h, etc.)
+        $vcBase = "${env:ProgramFiles}\Microsoft Visual Studio"
+        $vcPath = Get-ChildItem "$vcBase\*\*\VC\Tools\MSVC\*" -Directory -ErrorAction SilentlyContinue |
+          Sort-Object Name -Descending | Select-Object -First 1
+        if ($vcPath) { $vcPath = Join-Path $vcPath.FullName "include" }
+        Write-Host "VC: $vcPath"
+        # Set INCLUDE to UCRT+VC only (no Windows SDK um/shared to avoid rpc.h conflicts)
+        $env:INCLUDE = "$ucrtPath;$vcPath"
+        "INCLUDE=$ucrtPath;$vcPath" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+        # Strip $(IncludePath) from all vcxproj files so MSBuild won't add SDK paths via /I flags
+        Get-ChildItem "$env:GITHUB_WORKSPACE\wined3d_vs" -Recurse -Filter "*.vcxproj" | ForEach-Object {
+          $content = Get-Content $_.FullName -Raw
+          if ($content.Contains('$(IncludePath)')) {
+            $content = $content.Replace(';$(IncludePath)', '')
+            Set-Content $_.FullName $content -NoNewline
+            Write-Host "Stripped `$(IncludePath) from $($_.Name)"
+          }
+        }
+
+    - name: Build foundational projects
+      shell: pwsh
+      working-directory: wined3d_vs
+      run: |
+        $cfg = "/p:Configuration=${{ matrix.configuration }}"
+        $plat = "/p:Platform=${{ matrix.platform }}"
+        $sln = "/p:SolutionDir=$PWD\"
+        # Build order: idls → winecrt0, dxguid, winebuild → everything else
+        $foundation = @(
+          "make_xftmpl\make_xftmpl.vcxproj",
+          "idls\idls.vcxproj",
+          "winecrt0\winecrt0.vcxproj",
+          "dxguid\dxguid.vcxproj",
+          "winebuild\winebuild.vcxproj"
+        )
+        foreach ($proj in $foundation) {
+          Write-Host "=== Building $proj ==="
+          & msbuild $proj $cfg $plat $sln /verbosity:minimal
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+        }
+
+    - name: Build vkd3d libraries
+      shell: pwsh
+      working-directory: wined3d_vs
+      run: |
+        $msbuildArgs = @(
+          "/p:Configuration=${{ matrix.configuration }}",
+          "/p:Platform=${{ matrix.platform }}",
+          "/p:SolutionDir=$PWD\",
+          "/m",
+          "/verbosity:minimal"
+        )
+        $projects = @(
+          "vkd3d-idls\vkd3d-idls.vcxproj",
+          "vkd3d-common\vkd3d-common.vcxproj",
+          "vkd3d-shader\vkd3d-shader.vcxproj",
+          "vkd3d\vkd3d.vcxproj",
+          "vkd3d-utils\vkd3d-utils.vcxproj"
+        )
+        foreach ($proj in $projects) {
+          Write-Host "=== Building $proj ==="
+          & msbuild $proj @msbuildArgs
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "FAILED: $proj"
+            exit 1
+          }
+        }
+
+    - name: Build core solution
+      run: >
+        msbuild wined3d.sln
+        /p:Configuration=${{ matrix.configuration }}
+        /p:Platform=${{ matrix.platform }}
+        /verbosity:minimal
+      working-directory: wined3d_vs
+      continue-on-error: true
+
+    - name: Package DLLs
+      shell: pwsh
+      run: |
+        $wineVersion = $env:WINE_TAG -replace '^wine-', ''
+        Write-Host "Wine version: $wineVersion"
+
+        $platform = "${{ matrix.platform }}"
+        $config = "${{ matrix.configuration }}"
+        $privateDir = "$env:GITHUB_WORKSPACE\wined3d_vs\${platform}_${config}"
+        $frontendDir = "$env:GITHUB_WORKSPACE\wined3d_vs\${platform}_${config}_dll"
+
+        $pkgDir = "$env:GITHUB_WORKSPACE\package\$wineVersion"
+        New-Item -ItemType Directory -Path $pkgDir -Force | Out-Null
+
+        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        $commit = git -C "$env:GITHUB_WORKSPACE\wined3d_vs" rev-parse --short HEAD
+        Set-Content -Path "$pkgDir\build-timestamp" -Value "$timestamp`ncommit: $commit" -Encoding utf8
+
+        $dllCount = 0
+        foreach ($dir in @($privateDir, $frontendDir)) {
+          if (Test-Path $dir) {
+            Get-ChildItem -Path $dir -Filter "*.dll" | ForEach-Object {
+              Write-Host "  $($_.Name)"
+              Copy-Item $_.FullName -Destination $pkgDir
+              $dllCount++
+            }
+          }
+        }
+        Write-Host "`nPackaged $dllCount DLLs -> $pkgDir"
+
+        $pdbDir = "$env:GITHUB_WORKSPACE\package\${wineVersion}_pdbs"
+        New-Item -ItemType Directory -Path $pdbDir -Force | Out-Null
+        foreach ($dir in @($privateDir, $frontendDir)) {
+          if (Test-Path $dir) {
+            Get-ChildItem -Path $dir -Filter "*.pdb" | ForEach-Object {
+              Copy-Item $_.FullName -Destination $pdbDir
+            }
+          }
+        }
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: build-${{ matrix.platform }}-${{ matrix.configuration }}
+        path: package/
+
+  release:
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.create_release == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout wined3d_vs
+      uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts/
+
+    - name: Create release archives
+      run: |
+        cd artifacts
+        for dir in */; do
+          name="${dir%/}"
+          if [ -d "$name" ]; then
+            zip -r "${name}-dlls.zip" "$name" -x "*_pdbs/*"
+            zip -r "${name}-pdbs.zip" "$name" -x "*/*.dll" "*/*.exe"
+          fi
+        done
+        ls -la *.zip
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: "${{ inputs.release_tag || format('build-{0}', github.run_number) }}"
+        name: "${{ inputs.release_tag || format('Build #{0}', github.run_number) }}"
+        body: "Wine D3D DLLs built from ${{ env.WINE_TAG }} with vkd3d ${{ env.VKD3D_TAG }} (Vulkan/d3d12 support). Includes: d3d8, d3d9, d3d11, d3d12, ddraw, dxgi, d3d10core, d2d1, d3dx9_36, d3dxof, d3drm, dsound, wined3d, vkd3d, debug symbols (PDBs)"
+        files: artifacts/*.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

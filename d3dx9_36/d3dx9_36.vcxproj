@@ -1259,8 +1259,7 @@
       <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">/wd4244 /wd4018 %(AdditionalOptions)</AdditionalOptions>
       <AdditionalOptions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">/wd4244 /wd4018 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
-    <ClCompile Include="..\..\wine\dlls\d3dx9_36\txc_compress_dxtn.c" />
-    <ClCompile Include="..\..\wine\dlls\d3dx9_36\txc_fetch_dxtn.c" />
+    <ClCompile Include="..\..\wine\dlls\d3dx9_36\d3dx_helpers.c" />
     <ClCompile Include="..\..\wine\dlls\d3dx9_36\util.c" />
     <ClCompile Include="..\..\wine\dlls\d3dx9_36\volume.c" />
     <ClCompile Include="..\..\wine\dlls\d3dx9_36\xfile.c" />
