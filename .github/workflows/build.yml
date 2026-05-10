@@ -31,6 +31,10 @@ jobs:
             platform: Win32
           - configuration: Release
             platform: Win32
+          - configuration: Debug
+            platform: x64
+          - configuration: Release
+            platform: x64
 
     steps:
     - name: Checkout wined3d_vs
